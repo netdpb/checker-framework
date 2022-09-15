@@ -351,7 +351,7 @@ public class TestDiagnosticUtils {
               true);
       return new TestDiagnosticLine(
           filename, lineNumber, line, Collections.singletonList(diagnostic));
-    } else if (trimmedLine.startsWith("// jspecify_")) {
+    } else if (trimmedLine.startsWith("// jspecify_") || trimmedLine.startsWith("// test:")) {
       TestDiagnostic diagnostic =
           fromJSpecifyFileComment(filename, errorLine, trimmedLine.substring(3));
       return new TestDiagnosticLine(
