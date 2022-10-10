@@ -12,6 +12,7 @@ import javax.tools.Diagnostic;
 import javax.tools.JavaFileObject;
 import org.checkerframework.checker.nullness.qual.EnsuresNonNullIf;
 import org.checkerframework.checker.nullness.qual.Nullable;
+import org.checkerframework.framework.test.TestConfiguration;
 import org.checkerframework.javacutil.Pair;
 import org.plumelib.util.CollectionsPlume;
 
@@ -64,7 +65,11 @@ public class TestDiagnosticUtils {
 
   /**
    * Instantiate the diagnostic from a string that would appear in a Java file, e.g.: "error:
-   * (message)"
+   * (message)".
+   *
+   * <p>JSpecify diagnostics start with "jspecify_".
+   *
+   * <p>JSpecify conformance test diagnistics start with "test:".
    *
    * @param filename the file containing the diagnostic (and the error)
    * @param lineNumber the line number of the line immediately below the diagnostic comment in the
@@ -74,6 +79,18 @@ public class TestDiagnosticUtils {
    */
   public static TestDiagnostic fromJavaFileComment(
       String filename, long lineNumber, String stringFromJavaFile) {
+    if (stringFromJavaFile.startsWith("test:")) {
+      return ConformanceTestDiagnostic.create(filename, lineNumber, stringFromJavaFile);
+    }
+    if (stringFromJavaFile.startsWith("jspecify_")) {
+      return new TestDiagnostic(
+          filename,
+          lineNumber,
+          DiagnosticKind.JSpecify,
+          stringFromJavaFile,
+          /*isFixable=*/ false,
+          /*omitParentheses=*/ true);
+    }
     return fromPatternMatching(
         DIAGNOSTIC_IN_JAVA_PATTERN,
         DIAGNOSTIC_WARNING_IN_JAVA_PATTERN,
@@ -86,34 +103,13 @@ public class TestDiagnosticUtils {
    * never fixable and always has parentheses.
    */
   public static TestDiagnostic fromJavaxToolsDiagnostic(
-      String diagnosticString, boolean noMsgText) {
+      String diagnosticString, TestConfiguration configuration) {
     // It would be nice not to parse this from the diagnostic string.
     // However, diagnostic.toString() may contain "[unchecked]" even though getMessage() does not.
     // Since we want to match the error messages reported by javac exactly, we must parse.
-    Pair<String, String> trimmed = formatJavaxToolString(diagnosticString, noMsgText);
+    Pair<String, String> trimmed = formatJavaxToolString(diagnosticString, configuration);
     return fromPatternMatching(
         DIAGNOSTIC_PATTERN, DIAGNOSTIC_WARNING_PATTERN, trimmed.second, null, trimmed.first);
-  }
-
-  /**
-   * Instantiate the diagnostic from a JSpecify string that would appear in a Java file, e.g.:
-   * "jspecify_some_category".
-   *
-   * @param filename the file containing the diagnostic (and the error)
-   * @param lineNumber the line number of the line immediately below the diagnostic comment in the
-   *     Java file
-   * @param stringFromJavaFile the string containing the diagnostic
-   * @return a new TestDiagnostic
-   */
-  public static TestDiagnostic fromJSpecifyFileComment(
-      String filename, long lineNumber, String stringFromJavaFile) {
-    return new TestDiagnostic(
-        filename,
-        lineNumber,
-        DiagnosticKind.JSpecify,
-        stringFromJavaFile,
-        /*isFixable=*/ false,
-        /*omitParentheses=*/ true);
   }
 
   /**
@@ -145,6 +141,11 @@ public class TestDiagnosticUtils {
       capturingGroupOffset = 0;
     }
 
+    DetailMessageDiagnostic detailMessageDiagnostic =
+        DetailMessageDiagnostic.parse(diagnosticString);
+    if (detailMessageDiagnostic != null) {
+      return detailMessageDiagnostic;
+    }
     Matcher diagnosticMatcher = diagnosticPattern.matcher(diagnosticString);
     if (diagnosticMatcher.matches()) {
       Pair<DiagnosticKind, Boolean> categoryToFixable =
@@ -203,13 +204,14 @@ public class TestDiagnosticUtils {
    * line of the message, without the leading filename.
    *
    * @param original a javax diagnostic
-   * @param noMsgText whether to do work; if false, this returns a pair of (argument, "").
+   * @param configuration whether to do work; if false, this returns a pair of (argument, "").
    * @return the diagnostic, split into message and filename
    */
-  public static Pair<String, String> formatJavaxToolString(String original, boolean noMsgText) {
+  public static Pair<String, String> formatJavaxToolString(
+      String original, TestConfiguration configuration) {
     String trimmed = original;
     String filename = "";
-    if (noMsgText) {
+    if (configuration.getOptions().containsKey("-Anomsgtext")) {
       if (!retainAllLines(trimmed)) {
         int lineSepPos = trimmed.indexOf(System.lineSeparator());
         if (lineSepPos != -1) {
@@ -353,7 +355,7 @@ public class TestDiagnosticUtils {
           filename, lineNumber, line, Collections.singletonList(diagnostic));
     } else if (trimmedLine.startsWith("// jspecify_") || trimmedLine.startsWith("// test:")) {
       TestDiagnostic diagnostic =
-          fromJSpecifyFileComment(filename, errorLine, trimmedLine.substring(3));
+          fromJavaFileComment(filename, errorLine, trimmedLine.substring(3));
       return new TestDiagnosticLine(
           filename, errorLine, line, Collections.singletonList(diagnostic));
     } else {
@@ -376,7 +378,8 @@ public class TestDiagnosticUtils {
   }
 
   public static Set<TestDiagnostic> fromJavaxDiagnosticList(
-      List<Diagnostic<? extends JavaFileObject>> javaxDiagnostics, boolean noMsgText) {
+      List<Diagnostic<? extends JavaFileObject>> javaxDiagnostics,
+      TestConfiguration configuration) {
     Set<TestDiagnostic> diagnostics = new LinkedHashSet<>(javaxDiagnostics.size());
 
     for (Diagnostic<? extends JavaFileObject> diagnostic : javaxDiagnostics) {
@@ -392,7 +395,8 @@ public class TestDiagnosticUtils {
         continue;
       }
 
-      diagnostics.add(TestDiagnosticUtils.fromJavaxToolsDiagnostic(diagnosticString, noMsgText));
+      diagnostics.add(
+          TestDiagnosticUtils.fromJavaxToolsDiagnostic(diagnosticString, configuration));
     }
 
     return diagnostics;
