@@ -69,7 +69,7 @@ public class TestDiagnosticUtils {
    *
    * <p>JSpecify diagnostics start with "jspecify_".
    *
-   * <p>JSpecify conformance test diagnistics start with "test:".
+   * <p>JSpecify conformance test diagnostics start with "test:".
    *
    * @param filename the file containing the diagnostic (and the error)
    * @param lineNumber the line number of the line immediately below the diagnostic comment in the
