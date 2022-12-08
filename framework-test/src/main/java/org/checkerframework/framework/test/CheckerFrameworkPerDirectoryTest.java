@@ -139,6 +139,11 @@ public abstract class CheckerFrameworkPerDirectoryTest {
 
   @Test
   public void run() {
+    TypecheckResult adjustedTestResult = executeTypecheck();
+    TestUtilities.assertTestDidNotFail(adjustedTestResult);
+  }
+
+  protected TypecheckResult executeTypecheck() {
     boolean shouldEmitDebugInfo = TestUtilities.getShouldEmitDebugInfo();
     List<String> customizedOptions = customizeOptions(Collections.unmodifiableList(checkerOptions));
     TestConfiguration config =
@@ -150,8 +155,7 @@ public abstract class CheckerFrameworkPerDirectoryTest {
             customizedOptions,
             shouldEmitDebugInfo);
     TypecheckResult testResult = new TypecheckExecutor().runTest(config);
-    TypecheckResult adjustedTestResult = adjustTypecheckResult(testResult);
-    TestUtilities.assertTestDidNotFail(adjustedTestResult);
+    return adjustTypecheckResult(testResult);
   }
 
   /**
